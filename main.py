@@ -7,11 +7,20 @@ from PIL import Image
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
 import optuna
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--image_dir', type=str, default='image/image', help='Directory containing input images')
+parser.add_argument('--save_dir', type=str, default='submit', help='Directory to save SVG files')
+parser.add_argument('--temp_dir', type=str, default='render', help='Temporary directory for rendered images')
+parser.add_argument('--n_trials', type=int, default=100, help='Number of trials for each image')
+parser.add_argument('--processes', type=int, default=16, help='Number of processes to use')
+args = parser.parse_args()
 
 
-image_dir = 'image/image'
-save_dir = 'submit'
-temp_dir = 'render'
+image_dir = args.image_dir
+save_dir =  args.save_dir
+temp_dir =  args.temp_dir
 os.makedirs(temp_dir, exist_ok=True)
 os.makedirs(save_dir, exist_ok=True)
 
@@ -69,15 +78,6 @@ def calculate_ssim_between_images(img_path1, img_path2):
 #     )
 
 
-def file_score(svg_path):
-    with open(svg_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    if len(content) > 50000:
-        return -float('inf')
-    else:
-        return len(content)
-
-
 def convert_and_score(params, input_path, file):
     """用给定参数转换单张图片，返回评分"""
     svg_path = os.path.join(save_dir, file.replace('.jpg', '.svg'))
@@ -100,12 +100,12 @@ def convert_and_score(params, input_path, file):
     )
 
     if not check_svg_validity(svg_path):
-        return 0, file_score(svg_path)
+        return 0
 
     if not render_svg_to_png(svg_path, png_path):
-        return 0, file_score(svg_path)
+        return 0
 
-    return calculate_ssim_between_images(input_path, png_path), file_score(svg_path)
+    return calculate_ssim_between_images(input_path, png_path)
 
 
 # with Pool(processes=None) as p:  # 进程池，并行数量缺省为CPU核心数
@@ -132,10 +132,8 @@ def search_best_params_for_image(file):
         }
         return convert_and_score(params, input_path, file)
 
-    study = optuna.create_study(directions=['maximize', 'maximize'])  # 优化SSIM和SVG文件大小
-    study.optimize(objective, n_trials=100)  # 每张图片20次搜索
-
-    trial_with_highest_ssim = max(study.trials, key=lambda t: t.values[0])
+    study = optuna.create_study(direction='maximize')  # 优化SSIM和SVG文件大小
+    study.optimize(objective, n_trials=args.n_trials)  # 每张图片20次搜索
 
     svg_path = os.path.join(save_dir, file.replace('.jpg', '.svg'))
     png_path = os.path.join(temp_dir, file.replace('.jpg', '_render.png'))
@@ -143,7 +141,7 @@ def search_best_params_for_image(file):
         input_path,
         svg_path,
         colormode='color',
-        **trial_with_highest_ssim.params
+        **study.best_params
     )
 
     with open(svg_path, 'r', encoding='utf-8') as f:
@@ -151,21 +149,14 @@ def search_best_params_for_image(file):
 
     render_svg_to_png(svg_path, png_path)
 
-    assert trial_with_highest_ssim.values[0] == calculate_ssim_between_images(input_path, png_path)
-    assert trial_with_highest_ssim.values[1] == len(content)
-    print(f"Processed {file}: Best SSIM = {trial_with_highest_ssim.values[0]}, SVG Size = {trial_with_highest_ssim.values[1]} bytes")
-
-    # return {
-    #     'file': file,
-    #     'best_params': study.best_params,
-    #     'best_score': study.best_value
-    # }
+    assert study.best_value == calculate_ssim_between_images(input_path, png_path)
+    print(f"Processed {file}: Best SSIM = {study.best_value}, SVG Size = {len(content)} bytes")
 
 
-for f in os.listdir(image_dir):
-    search_best_params_for_image(f)
+# for f in os.listdir(image_dir):
+#     search_best_params_for_image(f)
     
-# with Pool(processes=None) as p:  # 进程池，并行数量缺省为CPU核心数
-#     files = [f for f in os.listdir(image_dir)]
-#     for _ in tqdm(p.imap_unordered(search_best_params_for_image, files), total=len(files)):
-#         pass  # tqdm 进度条更新
+with Pool(processes=args.processes) as p:  # 进程池，并行数量缺省为CPU核心数
+    files = [f for f in os.listdir(image_dir)]
+    for _ in tqdm(p.imap_unordered(search_best_params_for_image, files), total=len(files)):
+        pass  # tqdm 进度条更新
