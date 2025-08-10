@@ -18,6 +18,9 @@ parser.add_argument('--processes', type=int, default=16, help='Number of process
 args = parser.parse_args()
 
 
+optuna.logging.set_verbosity(optuna.logging.WARNING)  # 只保留警告及以上
+
+
 image_dir = args.image_dir
 save_dir =  args.save_dir
 temp_dir =  args.temp_dir
