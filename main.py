@@ -15,10 +15,12 @@ parser.add_argument('--save_dir', type=str, default='submit', help='Directory to
 parser.add_argument('--temp_dir', type=str, default='render', help='Temporary directory for rendered images')
 parser.add_argument('--n_trials', type=int, default=100, help='Number of trials for each image')
 parser.add_argument('--processes', type=int, default=16, help='Number of processes to use')
+parser.add_argument('--verbose', action='store_true', help='Enable verbose output', default=False)
 args = parser.parse_args()
 
 
-optuna.logging.set_verbosity(optuna.logging.WARNING)  # 只保留警告及以上
+if not args.verbose:
+    optuna.logging.set_verbosity(optuna.logging.WARNING)  # 只保留警告及以上
 
 
 image_dir = args.image_dir
