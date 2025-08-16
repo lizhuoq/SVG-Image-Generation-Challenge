@@ -15,6 +15,8 @@ parser.add_argument('--save_dir', type=str, default='submit', help='Directory to
 parser.add_argument('--temp_dir', type=str, default='render', help='Temporary directory for rendered images')
 parser.add_argument('--n_trials', type=int, default=100, help='Number of trials for each image')
 parser.add_argument('--processes', type=int, default=16, help='Number of processes to use')
+parser.add_argument('--chunk_size', type=int, default=100)
+parser.add_argument('--n_chunk', type=int, default=0)
 parser.add_argument('--verbose', action='store_true', help='Enable verbose output', default=False)
 args = parser.parse_args()
 
@@ -163,5 +165,7 @@ def search_best_params_for_image(file):
     
 with Pool(processes=args.processes) as p:  # 进程池，并行数量缺省为CPU核心数
     files = [f for f in os.listdir(image_dir)]
+    files = files[args.n_chunk * args.chunk_size: (args.n_chunk + 1) * args.chunk_size]
+    print(f"Processing chunk {args.n_chunk} with {len(files)} files")
     for _ in tqdm(p.imap_unordered(search_best_params_for_image, files), total=len(files)):
         pass  # tqdm 进度条更新
